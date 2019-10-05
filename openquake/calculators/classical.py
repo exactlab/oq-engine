@@ -16,6 +16,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with OpenQuake. If not, see <http://www.gnu.org/licenses/>.
 import os
+import math
 import time
 import logging
 import operator
@@ -24,7 +25,7 @@ import numpy
 from openquake.baselib import parallel, hdf5
 from openquake.baselib.general import AccumDict, block_splitter
 from openquake.hazardlib.contexts import ContextMaker
-from openquake.hazardlib.calc.filters import split_sources
+from openquake.hazardlib.calc.filters import split_sources, SourceFilter
 from openquake.hazardlib.calc.hazard_curve import classical
 from openquake.hazardlib.probability_map import (
     ProbabilityMap, ProbabilityCurve)
@@ -246,8 +247,9 @@ class ClassicalCalculator(base.HazardCalculator):
         M = len(oq.imtls)
         trt_sources = self.csm.get_trt_sources(optimize_dupl=True)
         del self.csm  # save memory
+        ntiles = math.ceil(len(self.sitecol) / oq.sites_per_tile)
         maxweight = source.get_maxweight(
-            trt_sources, weight, oq.concurrent_tasks)
+            trt_sources, weight, oq.concurrent_tasks / ntiles)
         maxdist = int(max(oq.maximum_distance.values()))
         if oq.task_duration is None:  # inferred
             # from 1 minute up to 1 day
@@ -263,19 +265,21 @@ class ClassicalCalculator(base.HazardCalculator):
             task_duration=td, maxweight=maxweight)
         logging.info(f'ruptures_per_task={maxweight}, '
                      f'maxdist={maxdist} km, task_duration={td} s')
-        srcfilter = self.src_filter(self.datastore.tempname)
+        tiles = self.sitecol.split_in_tiles(ntiles)
         if oq.calculation_mode == 'preclassical':
             f1 = f2 = preclassical
         else:
             f1, f2 = classical, classical_split_filter
         for trt, sources, atomic in trt_sources:
             gsims = self.csm_info.gsim_lt.get_gsims(trt)
-            if atomic:
-                # do not split atomic groups
-                yield f1, (sources, srcfilter, gsims, param)
-            else:  # regroup the sources in blocks
-                for block in block_splitter(sources, maxweight, weight):
-                    yield f2, (block, srcfilter, gsims, param)
+            for tile in tiles:
+                srcfilter = SourceFilter(tile, oq.maximum_distance)
+                if atomic:
+                    # do not split atomic groups
+                    yield f1, (sources, srcfilter, gsims, param)
+                else:  # regroup the sources in blocks
+                    for block in block_splitter(sources, maxweight, weight):
+                        yield f2, (block, srcfilter, gsims, param)
 
     def save_hazard(self, acc, pmap_by_kind):
         """
