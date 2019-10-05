@@ -273,36 +273,7 @@ class SourceFilter(object):
             IntegrationDistance(integration_distance)
             if isinstance(integration_distance, dict)
             else integration_distance)
-        if not filename:  # keep the sitecol in memory
-            self.__dict__['sitecol'] = sitecol
-
-    def __getstate__(self):
-        if self.filename:
-            # in the engine self.filename is the .hdf5 cache file
-            return dict(filename=self.filename, slice=self.slice,
-                        integration_distance=self.integration_distance)
-        else:
-            # when using calc_hazard_curves without an .hdf5 cache file
-            return dict(filename=None, sitecol=self.sitecol, slice=self.slice,
-                        integration_distance=self.integration_distance)
-
-    @property
-    def sitecol(self):
-        """
-        Read the site collection from .filename and cache it
-        """
-        if 'sitecol' in vars(self):
-            return self.__dict__['sitecol']
-        if self.filename is None:
-            return
-        elif not os.path.exists(self.filename):
-            raise FileNotFoundError('%s: shared_dir issue?' % self.filename)
-        with h5py.File(self.filename, 'r') as h5:
-            sc = SiteCollection.__new__(SiteCollection)
-            sc.array = h5['sitecol'][self.slice]
-            sc.complete = sc
-            self.__dict__['sitecol'] = sc
-        return sc
+        self.sitecol = sitecol
 
     def get_rectangle(self, src):
         """
