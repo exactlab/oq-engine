@@ -184,7 +184,7 @@ class ContextMaker(object):
             for gsim, rlzis in gsims.items():
                 for rlzi in rlzis:
                     self.gsim_by_rlzi[rlzi] = gsim
-        self.ctx_mon = monitor('make_contexts', measuremem=False)
+        self.ctx_mon = monitor('make_contexts', measuremem=True)
         self.poe_mon = monitor('get_poes', measuremem=False)
         self.gmf_mon = monitor('computing mean_std', measuremem=False)
         self.loglevels = DictArray(self.imtls)
@@ -294,20 +294,23 @@ class ContextMaker(object):
         nrups, nsites = 0, 0
         L, G = len(self.imtls.array), len(self.gsims)
         poemap = ProbabilityMap(L, G)
-        for rup, sites in self._gen_rup_sites(src, s_sites):
-            try:
-                with self.ctx_mon:
-                    sctx, dctx = self.make_contexts(sites, rup)
-            except FarAwayRupture:
-                continue
+        triples = []
+        with self.ctx_mon:
+            for rup, sites in self._gen_rup_sites(src, s_sites):
+                try:
+                    r_sites, dctx = self.make_contexts(sites, rup)
+                except FarAwayRupture:
+                    continue
+                triples.append((rup, r_sites, dctx))
+        for rup, r_sites, dctx in triples:
             with self.gmf_mon:
-                mean_std = numpy.zeros((2, len(sctx), M, G))
+                mean_std = numpy.zeros((2, len(r_sites), M, G))
                 for g, gsim in enumerate(self.gsims):
                     dctx_ = dctx.roundup(gsim.minimum_distance)
                     mean_std[:, :, :, g] = gsim.get_mean_std(
-                        sctx, rup, dctx_, imts)
+                        r_sites, rup, dctx_, imts)
             with self.poe_mon:
-                pairs = zip(sctx.sids, self._make_pnes(rup, mean_std))
+                pairs = zip(r_sites.sids, self._make_pnes(rup, mean_std))
                 # _make_pnes is heavy, the part below is fast
                 if rup_indep:
                     for sid, pne in pairs:
@@ -317,9 +320,9 @@ class ContextMaker(object):
                         poemap.setdefault(sid, rup_indep).array += (
                             1.-pne) * rup.weight
             nrups += 1
-            nsites += len(sctx)
+            nsites += len(r_sites)
             if fewsites:  # store rupdata
-                rupdata.add(rup, src.id, sctx, dctx)
+                rupdata.add(rup, src.id, r_sites, dctx)
         poemap.nrups = nrups
         poemap.nsites = nsites
         poemap.data = rupdata.data
