@@ -302,7 +302,9 @@ class ContextMaker(object):
                 except FarAwayRupture:
                     continue
                 triples.append((rup, r_sites, dctx))
-        for rup, r_sites, dctx in triples:
+        U = len(triples)
+        pnes = AccumDict(accum=numpy.ones((U, L, G)))
+        for u, (rup, r_sites, dctx) in enumerate(triples):
             with self.gmf_mon:
                 mean_std = numpy.zeros((2, len(r_sites), M, G))
                 for g, gsim in enumerate(self.gsims):
@@ -310,19 +312,20 @@ class ContextMaker(object):
                     mean_std[:, :, :, g] = gsim.get_mean_std(
                         r_sites, rup, dctx_, imts)
             with self.poe_mon:
-                pairs = zip(r_sites.sids, self._make_pnes(rup, mean_std))
-                # _make_pnes is heavy, the part below is fast
-                if rup_indep:
-                    for sid, pne in pairs:
-                        poemap.setdefault(sid, rup_indep).array *= pne
-                else:
-                    for sid, pne in pairs:
+                for sid, pne in zip(
+                        r_sites.sids, self._make_pnes(rup, mean_std)):
+                    if rup_indep:
+                        pnes[sid][u] = pne
+                    else:
                         poemap.setdefault(sid, rup_indep).array += (
                             1.-pne) * rup.weight
             nrups += 1
             nsites += len(r_sites)
             if fewsites:  # store rupdata
                 rupdata.add(rup, src.id, r_sites, dctx)
+        if rup_indep:
+            for sid, pne in pnes.items():
+                poemap.setdefault(sid, rup_indep).array *= pne.prod(axis=0)
         poemap.nrups = nrups
         poemap.nsites = nsites
         poemap.data = rupdata.data
