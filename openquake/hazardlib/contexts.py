@@ -190,6 +190,7 @@ class ContextMaker():
         self.poe_mon = monitor('get_poes', measuremem=False)
         self.pne_mon = monitor('composing pnes', measuremem=False)
         self.gmf_mon = monitor('computing mean_std', measuremem=False)
+        self.hc_mon = monitor('building rupture surface', measuremem=False)
         self.loglevels = DictArray(self.imtls)
         self.shift_hypo = param.get('shift_hypo')
         with warnings.catch_warnings():
@@ -365,7 +366,8 @@ class ContextMaker():
                     # there is nothing to collapse
                     for rup in src.gen_ruptures(mag, mag_occ_rate,
                                                 collapse=False,
-                                                shift_hypo=self.shift_hypo):
+                                                shift_hypo=self.shift_hypo,
+                                                mon=self.hc_mon):
                         yield rup, sites, mdist
                 else:
                     # compute the collapse distance and use it
@@ -375,18 +377,23 @@ class ContextMaker():
                         cdist = min(self.pointsource_distance, mdist)
                     close_sites, far_sites = sites.split(loc, cdist)
                     if close_sites is None:  # all is far
-                        for rup in src.gen_ruptures(mag, mag_occ_rate, 1):
+                        for rup in src.gen_ruptures(
+                                mag, mag_occ_rate, 1, mon=self.hc_mon):
                             yield rup, far_sites, mdist
                     elif far_sites is None:  # all is close
-                        for rup in src.gen_ruptures(mag, mag_occ_rate, 0):
+                        for rup in src.gen_ruptures(
+                                mag, mag_occ_rate, 0, mon=self.hc_mon):
                             yield rup, close_sites, mdist
                     else:  # some sites are far, some are close
-                        for rup in src.gen_ruptures(mag, mag_occ_rate, 1):
+                        for rup in src.gen_ruptures(
+                                mag, mag_occ_rate, 1, mon=self.hc_mon):
                             yield rup, far_sites, mdist
-                        for rup in src.gen_ruptures(mag, mag_occ_rate, 0):
+                        for rup in src.gen_ruptures(
+                                mag, mag_occ_rate, 0, mon=self.hc_mon):
                             yield rup, close_sites, mdist
         else:  # no point source or site-specific analysis
-            for rup in src.iter_ruptures(shift_hypo=self.shift_hypo):
+            for rup in src.iter_ruptures(
+                    shift_hypo=self.shift_hypo, mon=self.hc_mon):
                 yield rup, sites, None
 
     def get_pmap_by_grp(self, src_sites, src_mutex=False, rup_mutex=False):

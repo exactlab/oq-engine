@@ -17,6 +17,7 @@
 Module :mod:`openquake.hazardlib.source.point` defines :class:`PointSource`.
 """
 import math
+from openquake.baselib.performance import Monitor
 from openquake.baselib.slots import with_slots
 from openquake.hazardlib.scalerel import PointMSR
 from openquake.hazardlib.geo import Point, geodetic
@@ -158,16 +159,18 @@ class PointSource(ParametricSeismicSource):
             radius.append(math.sqrt(rup_length ** 2 + rup_width ** 2) / 2.0)
         return max(radius)
 
-    def iter_ruptures(self, **kwargs):
+    def iter_ruptures(self, mon=Monitor(), **kwargs):
         """
         Generate one rupture for each combination of magnitude, nodal plane
         and hypocenter depth.
         """
         for mag, mag_occ_rate in self.get_annual_occurrence_rates():
             yield from self.gen_ruptures(mag, mag_occ_rate, collapse=False,
-                                         shift_hypo=kwargs.get('shift_hypo'))
+                                         shift_hypo=kwargs.get('shift_hypo'),
+                                         mon=mon)
 
-    def gen_ruptures(self, mag, mag_occ_rate, collapse, shift_hypo=False):
+    def gen_ruptures(self, mag, mag_occ_rate, collapse, shift_hypo=False,
+                     mon=Monitor()):
         """
         Generate one rupture for each combination of magnitude, nodal plane
         and hypocenter depth.
@@ -175,6 +178,7 @@ class PointSource(ParametricSeismicSource):
         :param mag: magnitude
         :param mag_occ_rate: occurrence rate for the given magnitude
         :param collapse: if True, collapse the ruptures to one
+        :param shift_hypo: if True, shift the hypocenter
         """
         for np_prob, np in self.nodal_plane_distribution.data:
             for hc_prob, hc_depth in self.hypocenter_distribution.data:
@@ -184,7 +188,9 @@ class PointSource(ParametricSeismicSource):
                 occurrence_rate = (mag_occ_rate *
                                    (1 if collapse else np_prob) *
                                    (1 if collapse else hc_prob))
-                surface, nhc = self._get_rupture_surface(mag, np, hypocenter)
+                with mon:
+                    surface, nhc = self._get_rupture_surface(
+                        mag, np, hypocenter)
                 if shift_hypo:
                     hypocenter = nhc
                 yield ParametricProbabilisticRupture(
