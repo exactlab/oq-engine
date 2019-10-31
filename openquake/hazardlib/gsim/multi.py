@@ -21,6 +21,7 @@ multiple GMPEs for different IMTs when passed a dictionary of ground motion
 models organised by IMT type or by a string describing the association
 """
 import collections
+import numpy
 from openquake.hazardlib import const
 from openquake.hazardlib.gsim.base import GMPE, registry
 from openquake.hazardlib.imt import from_string
@@ -71,14 +72,19 @@ class MultiGMPE(GMPE, collections.abc.Mapping):
         super().__init__(**kwargs)
         for name in uppernames:
             setattr(self, name, set(getattr(self, name)))
-        for imt, gsim_dic in self.kwargs.items():
-            [(gsim_name, kw)] = gsim_dic.items()
-            self.kwargs[imt] = gsim = registry[gsim_name](**kw)
-            imt_class = from_string(imt).__class__
-            if imt_class not in gsim.DEFINED_FOR_INTENSITY_MEASURE_TYPES:
-                raise ValueError("IMT %s not supported by %s" % (imt, gsim))
-            for name in uppernames:
-                getattr(self, name).update(getattr(gsim, name))
+        items = list(self.kwargs.items())
+        for imt, gsim_dic in items:
+            weight = gsim_dic.pop('gmpe_weight', 1)
+            assert 0 <= weight <= 1, weight
+            self.kwargs[imt] = []
+            for gsim_name, kw in gsim_dic.items():
+                gs = registry[gsim_name](**kw)
+                self.kwargs[imt].append(gs)
+                imt_class = from_string(imt).__class__
+                if imt_class not in gs.DEFINED_FOR_INTENSITY_MEASURE_TYPES:
+                    raise ValueError("IMT %s not supported by %s" % (imt, gs))
+                for name in uppernames:
+                    getattr(self, name).update(getattr(gs, name))
 
     def __iter__(self):
         yield from self.kwargs
@@ -98,5 +104,7 @@ class MultiGMPE(GMPE, collections.abc.Mapping):
         """
         Call the get mean and stddevs of the GMPE for the respective IMT
         """
-        return self.kwargs[str(imt)].get_mean_and_stddevs(
-            sctx, rctx, dctx, imt, stddev_types)
+        gsims, weights = zip(*self.kwargs[str(imt)])
+        poes = [gsim.get_mean_and_stddevs(
+            sctx, rctx, dctx, imt, stddev_types) for gsim in gsims]
+        return numpy.average(poes, weights=weights)
