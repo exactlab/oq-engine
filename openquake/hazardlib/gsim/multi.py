@@ -72,14 +72,15 @@ class MultiGMPE(GMPE, collections.abc.Mapping):
         super().__init__(**kwargs)
         for name in uppernames:
             setattr(self, name, set(getattr(self, name)))
-        items = list(self.kwargs.items())
-        for imt, gsim_dic in items:
-            weight = gsim_dic.pop('gmpe_weight', 1)
-            assert 0 <= weight <= 1, weight
-            self.kwargs[imt] = []
+        self.gsims = {imt: [] for imt in self.kwargs}
+        self.weights = {imt: [] for imt in self.kwargs}
+        for imt, gsim_dic in self.kwargs.items():
             for gsim_name, kw in gsim_dic.items():
+                weight = kw.pop('gmpe_weight', 1)
+                assert 0 <= weight <= 1, weight
                 gs = registry[gsim_name](**kw)
-                self.kwargs[imt].append(gs)
+                self.gsims[imt].append(gs)
+                self.weights[imt].append(weight)
                 imt_class = from_string(imt).__class__
                 if imt_class not in gs.DEFINED_FOR_INTENSITY_MEASURE_TYPES:
                     raise ValueError("IMT %s not supported by %s" % (imt, gs))
@@ -104,7 +105,7 @@ class MultiGMPE(GMPE, collections.abc.Mapping):
         """
         Call the get mean and stddevs of the GMPE for the respective IMT
         """
-        gsims, weights = zip(*self.kwargs[str(imt)])
-        poes = [gsim.get_mean_and_stddevs(
-            sctx, rctx, dctx, imt, stddev_types) for gsim in gsims]
-        return numpy.average(poes, weights=weights)
+        im = str(imt)
+        poes = [gsim.get_mean_and_stddevs(sctx, rctx, dctx, imt, stddev_types)
+                for gsim in self.gsims[im]]
+        return numpy.average(poes, weights=self.weights[im])
