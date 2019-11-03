@@ -227,6 +227,13 @@ def get_params(job_inis, **kw):
     return params
 
 
+def exec_pyfiles(dirname):
+    for cwd, files, dirs in os.walk(dirname):
+        for f in files:
+            if f.endswith('.py'):
+                exec(open(os.path.join(cwd, f)).read())
+
+
 def get_oqparam(job_ini, pkg=None, calculators=None, hc_id=None, validate=1,
                 **kw):
     """
@@ -259,6 +266,7 @@ def get_oqparam(job_ini, pkg=None, calculators=None, hc_id=None, validate=1,
         calculators or base.calculators)
     if not isinstance(job_ini, dict):
         basedir = os.path.dirname(pkg.__file__) if pkg else ''
+        exec_pyfiles(basedir)
         job_ini = get_params([os.path.join(basedir, job_ini)])
     if hc_id:
         job_ini.update(hazard_calculation_id=str(hc_id))
