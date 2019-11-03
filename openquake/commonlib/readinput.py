@@ -231,6 +231,7 @@ def exec_pyfiles(dirname):
     for cwd, dirs, files in os.walk(dirname):
         for f in files:
             if f.endswith('.py'):
+                import pdb; pdb.set_trace()
                 exec(open(os.path.join(cwd, f)).read())
 
 
@@ -266,8 +267,8 @@ def get_oqparam(job_ini, pkg=None, calculators=None, hc_id=None, validate=1,
         calculators or base.calculators)
     if not isinstance(job_ini, dict):
         basedir = os.path.dirname(pkg.__file__) if pkg else ''
-        exec_pyfiles(basedir or '.')
         job_ini = get_params([os.path.join(basedir, job_ini)])
+        exec_pyfiles(job_ini['base_path'])
     if hc_id:
         job_ini.update(hazard_calculation_id=str(hc_id))
     job_ini.update(kw)
