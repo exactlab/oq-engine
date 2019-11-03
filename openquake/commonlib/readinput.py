@@ -231,7 +231,6 @@ def exec_pyfiles(dirname):
     for cwd, dirs, files in os.walk(dirname):
         for f in files:
             if f.endswith('.py'):
-                import pdb; pdb.set_trace()
                 exec(open(os.path.join(cwd, f)).read())
 
 
