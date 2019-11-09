@@ -311,7 +311,7 @@ class ContextMaker():
             t0 = time.time()
             try:
                 src, s_sites = next(it)
-                poemap = PmapMaker(self, src, s_sites, not rup_mutex).make()
+                poemap = PmapMaker(self, [src], s_sites, not rup_mutex).make()
                 _update(pmap, poemap, src, src_mutex, rup_mutex)
             except StopIteration:
                 break
@@ -358,10 +358,10 @@ class PmapMaker():
     """
     A class to compute the PoEs from a given source
     """
-    def __init__(self, cmaker, src, s_sites, rup_indep=True):
+    def __init__(self, cmaker, srcs, s_sites, rup_indep=True):
         vars(self).update(vars(cmaker))
         self.cmaker = cmaker
-        self.src = src
+        self.srcs = srcs
         self.s_sites = s_sites
         self.rup_indep = rup_indep
         self.fewsites = len(s_sites.complete) <= cmaker.max_sites_disagg
@@ -371,15 +371,16 @@ class PmapMaker():
         self.gmf_mon = cmaker.mon('computing mean_std', measuremem=False)
         with cmaker.mon('iter_ruptures', measuremem=False):
             self.mag_rups = [
-                (mag, list(rups)) for mag, rups in itertools.groupby(
-                    src.iter_ruptures(shift_hypo=self.shift_hypo),
-                    key=operator.attrgetter('mag'))]
+                (mag, list(rups)) for src in srcs
+                for mag, rups in itertools.groupby(
+                        src.iter_ruptures(shift_hypo=self.shift_hypo),
+                        key=operator.attrgetter('mag'))]
 
-    def _sids_poes(self, rup, r_sites, dctx):
+    def _sids_poes(self, rup, r_sites, dctx, srcid):
         # return sids and poes of shape (N, L, G)
         # NB: this must be fast since it is inside an inner loop
         if self.fewsites:  # store rupdata
-            self.rupdata.add(rup, self.src.id, r_sites, dctx)
+            self.rupdata.add(rup, srcid, r_sites, dctx)
         with self.gmf_mon:
             mean_std = base.get_mean_std(  # shape (2, N, M, G)
                 r_sites, rup, dctx, self.imts, self.gsims)
@@ -404,7 +405,7 @@ class PmapMaker():
         L, G = len(self.imtls.array), len(self.gsims)
         poemap = ProbabilityMap(L, G)
         dists = []
-        for rups, sites, mdist in self._gen_rups_sites():
+        for rups, sites, mdist, srcid in self._gen_tups():
             if mdist is not None:
                 dists.append(mdist)
             with self.ctx_mon:
@@ -413,7 +414,7 @@ class PmapMaker():
                 ctxs = self.collapse(ctxs)
                 numrups += len(ctxs)
             for rup, r_sites, dctx in ctxs:
-                sids, poes = self._sids_poes(rup, r_sites, dctx)
+                sids, poes = self._sids_poes(rup, r_sites, dctx, srcid)
                 with self.pne_mon:
                     pnes = rup.get_probability_no_exceedance(poes)
                     if self.rup_indep:
@@ -450,47 +451,49 @@ class PmapMaker():
             new_ctxs.extend(_collapse_ctxs(vals))
         return new_ctxs
 
-    def _gen_rups_sites(self):
-        src = self.src
-        sites = self.s_sites
-        loc = getattr(src, 'location', None)
-        triples = ((rups, sites, None) for mag, rups in self.mag_rups)
-        if loc:
-            # implements the collapse distance feature: the finite site effects
-            # are ignored for sites over collapse_factor x rupture_radius
-            # implements the max_radius feature: sites above
-            # max_radius * rupture_radius are discarded
-            simple = src.count_nphc() == 1  # no nodal plane/hypocenter distrib
-            if simple:
-                yield from triples  # there is nothing to collapse
-            elif self.pointsource_distance is None and (
-                    len(sites) < self.max_sites_disagg or isinstance(
-                        src.magnitude_scaling_relationship, PointMSR)):
-                yield from triples  # do not collapse for few sites or 0 radius
-            else:
-                weights, depths = zip(*src.hypocenter_distribution.data)
-                loc = copy.copy(loc)  # average hypocenter used in sites.split
-                loc.depth = numpy.average(depths, weights=weights)
-                trt = src.tectonic_region_type
-                for mag, rups in self.mag_rups:
-                    mdist = self.maximum_distance(trt, mag)
-                    radius = src._get_max_rupture_projection_radius(mag)
-                    if self.max_radius is not None:
-                        mdist = min(self.max_radius * radius, mdist)
-                    if self.pointsource_distance:  # legacy approach
-                        cdist = min(self.pointsource_distance, mdist)
-                    else:
-                        cdist = min(self.collapse_factor * radius, mdist)
-                    close_sites, far_sites = sites.split(loc, cdist)
-                    if close_sites is None:  # all is far
-                        yield _collapse(rups), far_sites, mdist
-                    elif far_sites is None:  # all is close
-                        yield rups, close_sites, mdist
-                    else:  # some sites are far, some are close
-                        yield _collapse(rups), far_sites, mdist
-                        yield rups, close_sites, mdist
-        else:  # no point source or site-specific analysis
-            yield from triples
+    def _gen_tups(self):
+        for src in self.srcs:
+            sites = self.s_sites
+            loc = getattr(src, 'location', None)
+            srcid = src.id
+            tups = ((rups, sites, None, srcid) for mag, rups in self.mag_rups)
+            if loc:
+                # implements the collapse distance feature: the finite site
+                # effects are ignored for sites over collapse_factor x
+                # rupture_radius
+                # implements the max_radius feature: sites above
+                # max_radius * rupture_radius are discarded
+                simple = src.count_nphc() == 1  # no nodal plane/hypocenter
+                if simple:
+                    yield from tups  # there is nothing to collapse
+                elif self.pointsource_distance is None and (
+                        len(sites) < self.max_sites_disagg or isinstance(
+                            src.magnitude_scaling_relationship, PointMSR)):
+                    yield from tups  # do not collapse
+                else:
+                    weights, depths = zip(*src.hypocenter_distribution.data)
+                    loc = copy.copy(loc)  # average hypocenter in sites.split
+                    loc.depth = numpy.average(depths, weights=weights)
+                    trt = src.tectonic_region_type
+                    for mag, rups in self.mag_rups:
+                        mdist = self.maximum_distance(trt, mag)
+                        radius = src._get_max_rupture_projection_radius(mag)
+                        if self.max_radius is not None:
+                            mdist = min(self.max_radius * radius, mdist)
+                        if self.pointsource_distance:  # legacy approach
+                            cdist = min(self.pointsource_distance, mdist)
+                        else:
+                            cdist = min(self.collapse_factor * radius, mdist)
+                        close_sites, far_sites = sites.split(loc, cdist)
+                        if close_sites is None:  # all is far
+                            yield _collapse(rups), far_sites, mdist, srcid
+                        elif far_sites is None:  # all is close
+                            yield rups, close_sites, mdist, srcid
+                        else:  # some sites are far, some are close
+                            yield _collapse(rups), far_sites, mdist, srcid
+                            yield rups, close_sites, mdist, srcid
+            else:  # no point source or site-specific analysis
+                yield from tups
 
 
 class BaseContext(metaclass=abc.ABCMeta):
