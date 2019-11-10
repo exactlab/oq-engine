@@ -39,18 +39,6 @@ KNOWN_DISTANCES = frozenset(
     'rrup rx ry0 rjb rhypo repi rcdpp azimuth azimuth_cp rvolc'.split())
 
 
-def _update(pmap, pm, src, src_mutex, rup_indep):
-    if rup_indep:
-        pm = ~pm
-    if not pm:
-        return
-    if src_mutex:
-        pm *= src.mutex_weight
-        pmap[src.src_group_id] += pm
-    else:
-        pmap[src.src_group_id] |= pm
-
-
 def get_distances(rupture, sites, param):
     """
     :param rupture: a rupture
@@ -304,20 +292,33 @@ class ContextMaker():
         totrups = 0
         src_mutex = getattr(group, 'src_interdep', None) == 'mutex'
         rup_indep = getattr(group, 'rup_interdep', None) != 'mutex'
-        for src, s_sites in srcfilter(group):
-            try:
-                poemap = PmapMaker(
-                    self, [src], s_sites, src_mutex, rup_indep
-                ).make(gids, rup_data, dists, calc_times)
-                _update(pmap, poemap, src, src_mutex, rup_indep)
-            except StopIteration:
-                break
-            except Exception as err:
-                etype, err, tb = sys.exc_info()
-                msg = '%s (source id=%s)' % (str(err), src.source_id)
-                raise etype(msg).with_traceback(tb)
-            totrups += poemap.totrups
-
+        if src_mutex:  # one source at the time
+            for src, s_sites in srcfilter(group):
+                try:
+                    poemap = PmapMaker(
+                        self, [src], s_sites, src_mutex, rup_indep
+                    ).make(gids, rup_data, dists, calc_times)
+                    if poemap:
+                        totrups += poemap.totrups
+                        poemap *= src.mutex_weight
+                        pmap[src.src_group_id] += poemap
+                except Exception as err:
+                    etype, err, tb = sys.exc_info()
+                    msg = '%s (source id=%s)' % (str(err), src.source_id)
+                    raise etype(msg).with_traceback(tb)
+        else:  # regular case, all sources together
+            for src, s_sites in srcfilter(group):
+                try:
+                    poemap = PmapMaker(
+                        self, [src], s_sites, src_mutex, rup_indep
+                    ).make(gids, rup_data, dists, calc_times)
+                    if poemap:
+                        totrups += poemap.totrups
+                        pmap[src.src_group_id] |= poemap
+                except Exception as err:
+                    etype, err, tb = sys.exc_info()
+                    msg = '%s (source id=%s)' % (str(err), src.source_id)
+                    raise etype(msg).with_traceback(tb)
         rdata = {k: numpy.array(v) for k, v in rup_data.items()}
         rdata['grp_id'] = numpy.uint16(gids)
         extra = dict(totrups=totrups,
@@ -416,6 +417,7 @@ class PmapMaker():
                 nsites += len(sids)
             calc_times[self.srcid] += numpy.array(
                 [numrups, nsites, time.time() - t0])
+        poemap = ~poemap if self.rup_indep else poemap
         poemap.totrups = totrups
         poemap.maxdist = numpy.mean(dists) if dists else None
         data = self.rupdata.data
