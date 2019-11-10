@@ -370,7 +370,7 @@ class PmapMaker():
                         src.iter_ruptures(shift_hypo=self.shift_hypo),
                         key=operator.attrgetter('mag'))]
 
-    def _sids_poes(self, rup, r_sites, dctx, srcid):
+    def _sids_poes(self, rup, r_sites, dctx):
         # return sids and poes of shape (N, L, G)
         # NB: this must be fast since it is inside an inner loop
         if self.fewsites:  # store rupdata
@@ -398,7 +398,7 @@ class PmapMaker():
         L, G = len(self.imtls.array), len(self.gsims)
         poemap = ProbabilityMap(L, G)
         dists = []
-        for rups, sites, mdist, srcid in self._gen_tups():
+        for rups, sites, mdist in self._gen_tups():
             t0 = time.time()
             numrups, nsites = 0, 0
             if mdist is not None:
@@ -409,7 +409,7 @@ class PmapMaker():
                 ctxs = self.collapse(ctxs)
                 numrups += len(ctxs)
             for rup, r_sites, dctx in ctxs:
-                sids, poes = self._sids_poes(rup, r_sites, dctx, srcid)
+                sids, poes = self._sids_poes(rup, r_sites, dctx)
                 with self.pne_mon:
                     pnes = rup.get_probability_no_exceedance(poes)
                     if self.rup_indep:
@@ -420,7 +420,7 @@ class PmapMaker():
                             poemap.setdefault(sid, self.rup_indep).array += (
                                 1.-pne) * rup.weight
                 nsites += len(sids)
-            calc_times[srcid] += numpy.array(
+            calc_times[self.srcid] += numpy.array(
                 [numrups, nsites, time.time() - t0])
         poemap.totrups = totrups
         poemap.maxdist = numpy.mean(dists) if dists else None
@@ -448,10 +448,10 @@ class PmapMaker():
 
     def _gen_tups(self):
         for src in self.srcs:
+            self.srcid = src.id
             sites = self.s_sites
             loc = getattr(src, 'location', None)
-            srcid = src.id
-            tups = ((rups, sites, None, srcid) for mag, rups in self.mag_rups)
+            tups = ((rups, sites, None) for mag, rups in self.mag_rups)
             if loc:
                 # implements the collapse distance feature: the finite site
                 # effects are ignored for sites over collapse_factor x
@@ -481,12 +481,12 @@ class PmapMaker():
                             cdist = min(self.collapse_factor * radius, mdist)
                         close_sites, far_sites = sites.split(loc, cdist)
                         if close_sites is None:  # all is far
-                            yield _collapse(rups), far_sites, mdist, srcid
+                            yield _collapse(rups), far_sites, mdist
                         elif far_sites is None:  # all is close
-                            yield rups, close_sites, mdist, srcid
+                            yield rups, close_sites, mdist
                         else:  # some sites are far, some are close
-                            yield _collapse(rups), far_sites, mdist, srcid
-                            yield rups, close_sites, mdist, srcid
+                            yield _collapse(rups), far_sites, mdist
+                            yield rups, close_sites, mdist
             else:  # no point source or site-specific analysis
                 yield from tups
 
