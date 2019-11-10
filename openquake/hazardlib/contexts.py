@@ -307,8 +307,9 @@ class ContextMaker():
         rup_indep = getattr(group, 'rup_interdep', None) != 'mutex'
         for src, s_sites in srcfilter(group):
             try:
-                poemap = PmapMaker(self, [src], s_sites, rup_indep).make(
-                    calc_times)
+                poemap = PmapMaker(
+                    self, [src], s_sites, src_mutex, rup_indep
+                ).make(calc_times)
                 _update(pmap, poemap, src, src_mutex, rup_indep)
             except StopIteration:
                 break
@@ -352,11 +353,12 @@ class PmapMaker():
     """
     A class to compute the PoEs from a given source
     """
-    def __init__(self, cmaker, srcs, s_sites, rup_indep=True):
+    def __init__(self, cmaker, srcs, s_sites, src_mutex, rup_indep):
         vars(self).update(vars(cmaker))
         self.cmaker = cmaker
         self.srcs = srcs
         self.s_sites = s_sites
+        self.src_mutex = src_mutex
         self.rup_indep = rup_indep
         self.fewsites = len(s_sites.complete) <= cmaker.max_sites_disagg
         self.rupdata = RupData(cmaker)
