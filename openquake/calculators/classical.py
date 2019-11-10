@@ -157,20 +157,21 @@ class ClassicalCalculator(base.HazardCalculator):
             rup_data = dic['rup_data']
             if rup_data:
                 nr = len(rup_data['grp_id'])
-                default = (numpy.ones(nr, F32) * numpy.nan,
-                           [numpy.zeros(0, F32)] * nr)
-                for k in self.rparams:
-                    # variable lenght arrays
-                    vlen = k.endswith('_') or k == 'probs_occur'
-                    try:
-                        v = rup_data[k]
-                    except KeyError:
-                        v = default[vlen]
-                    if vlen:
-                        self.datastore.hdf5.save_vlen('rup/' + k, v)
-                    else:
-                        dset = self.datastore['rup/' + k]
-                        hdf5.extend(dset, v)
+                if nr:
+                    default = (numpy.ones(nr, F32) * numpy.nan,
+                               [numpy.zeros(0, F32)] * nr)
+                    for k in self.rparams:
+                        # variable lenght arrays
+                        vlen = k.endswith('_') or k == 'probs_occur'
+                        try:
+                            v = rup_data[k]
+                        except KeyError:
+                            v = default[vlen]
+                        if vlen:
+                            self.datastore.hdf5.save_vlen('rup/' + k, v)
+                        else:
+                            dset = self.datastore['rup/' + k]
+                            hdf5.extend(dset, v)
         return acc
 
     def acc0(self):
