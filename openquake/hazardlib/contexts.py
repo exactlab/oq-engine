@@ -390,7 +390,7 @@ class PmapMaker():
                         src.iter_ruptures(shift_hypo=self.shift_hypo),
                         key=operator.attrgetter('mag'))]
         totrups = 0
-        rupdata = RupData(self.cmaker)
+        self.rupdata = RupData(self.cmaker)
         L, G = len(self.imtls.array), len(self.gsims)
         poemap = ProbabilityMap(L, G)
         dists = []
@@ -421,10 +421,11 @@ class PmapMaker():
         poemap = ~poemap if self.rup_indep else poemap
         poemap.totrups = totrups
         poemap.maxdist = numpy.mean(dists) if dists else None
-        if len(rupdata.data):
-            nr = len(rupdata.data['sid_'])
+        data = self.rupdata.data
+        if len(data):
+            nr = len(data['sid_'])
             gids.extend([self.grp_id] * nr)
-            for k, v in rupdata.data.items():
+            for k, v in data.items():
                 rup_data[k].extend(v)
         if poemap.maxdist:
             dists.append(poemap.maxdist)
