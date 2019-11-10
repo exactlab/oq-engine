@@ -46,7 +46,6 @@ def _update(pmap, pm, src, src_mutex, rup_indep):
         return
     if src_mutex:
         pm *= src.mutex_weight
-    if src_mutex:
         pmap[src.src_group_id] += pm
     else:
         pmap[src.src_group_id] |= pm
