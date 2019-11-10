@@ -265,7 +265,7 @@ class ClassicalCalculator(base.HazardCalculator):
         """
         oq = self.oqparam
         gsims_by_trt = self.csm_info.get_gsims_by_trt()
-        trt_sources = self.csm.get_trt_sources(optimize_dupl=True)
+        trt_sources = self.csm.get_trt_sources()
         del self.csm  # save memory
 
         def srcweight(src):
