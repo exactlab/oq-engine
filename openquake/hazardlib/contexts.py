@@ -46,11 +46,10 @@ def _update(pmap, pm, src, src_mutex, rup_indep):
         return
     if src_mutex:
         pm *= src.mutex_weight
-    for grp_id in src.src_group_ids:
-        if src_mutex:
-            pmap[grp_id] += pm
-        else:
-            pmap[grp_id] |= pm
+    if src_mutex:
+        pmap[src.src_group_id] += pm
+    else:
+        pmap[src.src_group_id] |= pm
 
 
 def get_distances(rupture, sites, param):
@@ -322,10 +321,9 @@ class ContextMaker():
             totrups += poemap.totrups
             if len(poemap.data):
                 nr = len(poemap.data['sid_'])
-                for gid in src.src_group_ids:
-                    gids.extend([gid] * nr)
-                    for k, v in poemap.data.items():
-                        rup_data[k].extend(v)
+                gids.extend([src.src_group_id] * nr)
+                for k, v in poemap.data.items():
+                    rup_data[k].extend(v)
 
         rdata = {k: numpy.array(v) for k, v in rup_data.items()}
         rdata['grp_id'] = numpy.uint16(gids)
