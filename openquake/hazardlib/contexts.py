@@ -289,11 +289,10 @@ class ContextMaker():
             ctxs.append((rup, sctx, dctx))
         return ctxs
 
-    def get_pmap_by_grp(self, src_sites, src_mutex=False, rup_mutex=False):
+    def get_pmap_by_grp(self, srcfilter, group):
         """
-        :param src_sites: an iterator of pairs (source, sites)
-        :param src_mutex: True if the sources are mutually exclusive
-        :param rup_mutex: True if the ruptures are mutually exclusive
+        :param srcfilter: a SourceFilter instance
+        :param group: a group of sources
         :return: dictionaries pmap, rdata, calc_times
         """
         imtls = self.imtls
@@ -303,12 +302,12 @@ class ContextMaker():
         rup_data = AccumDict(accum=[])
         # AccumDict of arrays with 3 elements nrups, nsites, calc_time
         calc_times = AccumDict(accum=numpy.zeros(3, numpy.float32))
-        it = iter(src_sites)
         dists = []
         totrups = 0
-        while True:
+        src_mutex = getattr(group, 'src_interdep', None) == 'mutex'
+        rup_mutex = getattr(group, 'rup_interdep', None) == 'mutex'
+        for src, s_sites in srcfilter(group):
             try:
-                src, s_sites = next(it)
                 poemap = PmapMaker(self, [src], s_sites, not rup_mutex).make(
                     calc_times)
                 _update(pmap, poemap, src, src_mutex, rup_mutex)
