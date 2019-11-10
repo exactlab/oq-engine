@@ -124,6 +124,7 @@ class RupData(object):
             probs_occur = rup.probs_occur
         else:
             probs_occur = numpy.zeros(0, numpy.float64)
+        self.data['grp_id'].append(self.cmaker.grp_id)
         self.data['occurrence_rate'].append(rate)
         self.data['weight'].append(rup.weight or numpy.nan)
         self.data['probs_occur'].append(probs_occur)
@@ -297,7 +298,6 @@ class ContextMaker():
         imtls = self.imtls
         L, G = len(imtls.array), len(self.gsims)
         pmap = AccumDict(accum=ProbabilityMap(L, G))
-        gids = []
         rup_data = AccumDict(accum=[])
         # AccumDict of arrays with 3 elements nrups, nsites, calc_time
         calc_times = AccumDict(accum=numpy.zeros(3, numpy.float32))
@@ -320,13 +320,10 @@ class ContextMaker():
                 dists.append(poemap.maxdist)
             totrups += poemap.totrups
             if len(poemap.data):
-                nr = len(poemap.data['sid_'])
-                gids.extend([src.src_group_id] * nr)
                 for k, v in poemap.data.items():
                     rup_data[k].extend(v)
 
         rdata = {k: numpy.array(v) for k, v in rup_data.items()}
-        rdata['grp_id'] = numpy.uint16(gids)
         extra = dict(totrups=totrups,
                      maxdist=numpy.mean(dists) if dists else None)
         return pmap, rdata, calc_times, extra

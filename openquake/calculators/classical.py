@@ -155,8 +155,8 @@ class ClassicalCalculator(base.HazardCalculator):
                 acc.eff_ruptures[grp_id] += eff_rups
 
             rup_data = dic['rup_data']
-            nr = len(rup_data['grp_id'])
-            if nr:
+            if rup_data:
+                nr = len(rup_data['grp_id'])
                 default = (numpy.ones(nr, F32) * numpy.nan,
                            [numpy.zeros(0, F32)] * nr)
                 for k in self.rparams:

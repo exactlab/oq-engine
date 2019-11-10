@@ -118,6 +118,7 @@ def classical(group, src_filter, gsims, param, monitor=Monitor()):
     param['maximum_distance'] = src_filter.integration_distance
     [trt] = trts  # there must be a single tectonic region type
     cmaker = ContextMaker(trt, gsims, param, monitor)
+    cmaker.grp_id = src.src_group_id
     pmap, rup_data, calc_times, extra = cmaker.get_pmap_by_grp(
         src_filter, group)
     extra['task_no'] = getattr(monitor, 'task_no', 0)
