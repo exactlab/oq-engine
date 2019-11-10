@@ -39,8 +39,8 @@ KNOWN_DISTANCES = frozenset(
     'rrup rx ry0 rjb rhypo repi rcdpp azimuth azimuth_cp rvolc'.split())
 
 
-def _update(pmap, pm, src, src_mutex, rup_mutex):
-    if not rup_mutex:
+def _update(pmap, pm, src, src_mutex, rup_indep):
+    if rup_indep:
         pm = ~pm
     if not pm:
         return
@@ -305,12 +305,12 @@ class ContextMaker():
         dists = []
         totrups = 0
         src_mutex = getattr(group, 'src_interdep', None) == 'mutex'
-        rup_mutex = getattr(group, 'rup_interdep', None) == 'mutex'
+        rup_indep = getattr(group, 'rup_interdep', None) != 'mutex'
         for src, s_sites in srcfilter(group):
             try:
-                poemap = PmapMaker(self, [src], s_sites, not rup_mutex).make(
+                poemap = PmapMaker(self, [src], s_sites, rup_indep).make(
                     calc_times)
-                _update(pmap, poemap, src, src_mutex, rup_mutex)
+                _update(pmap, poemap, src, src_mutex, rup_indep)
             except StopIteration:
                 break
             except Exception as err:
