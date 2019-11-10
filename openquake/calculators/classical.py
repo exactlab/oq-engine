@@ -156,8 +156,8 @@ class ClassicalCalculator(base.HazardCalculator):
                 acc.eff_ruptures[grp_id] += eff_rups
 
             rup_data = dic['rup_data']
-            if len(rup_data['grp_id']):
-                nr = len(rup_data['srcidx'])
+            nr = len(rup_data['grp_id'])
+            if nr:
                 default = (numpy.ones(nr, F32) * numpy.nan,
                            [numpy.zeros(0, F32)] * nr)
                 for k in self.rparams:
@@ -180,7 +180,7 @@ class ClassicalCalculator(base.HazardCalculator):
         """
         zd = AccumDict()
         num_levels = len(self.oqparam.imtls.array)
-        rparams = {'grp_id', 'srcidx', 'occurrence_rate',
+        rparams = {'grp_id', 'occurrence_rate',
                    'weight', 'probs_occur', 'sid_', 'lon_', 'lat_', 'rrup_'}
         gsims_by_trt = self.csm_info.get_gsims_by_trt()
         for sm in self.csm_info.source_models:

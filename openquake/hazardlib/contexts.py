@@ -119,13 +119,12 @@ class RupData(object):
                 self.add(rup, src.id, sites)
         return {k: numpy.array(v) for k, v in self.data.items()}
 
-    def add(self, rup, src_id, sctx, dctx=None):
+    def add(self, rup, sctx, dctx=None):
         rate = rup.occurrence_rate
         if numpy.isnan(rate):  # for nonparametric ruptures
             probs_occur = rup.probs_occur
         else:
             probs_occur = numpy.zeros(0, numpy.float64)
-        self.data['srcidx'].append(src_id or 0)
         self.data['occurrence_rate'].append(rate)
         self.data['weight'].append(rup.weight or numpy.nan)
         self.data['probs_occur'].append(probs_occur)
@@ -380,7 +379,7 @@ class PmapMaker():
         # return sids and poes of shape (N, L, G)
         # NB: this must be fast since it is inside an inner loop
         if self.fewsites:  # store rupdata
-            self.rupdata.add(rup, srcid, r_sites, dctx)
+            self.rupdata.add(rup, r_sites, dctx)
         with self.gmf_mon:
             mean_std = base.get_mean_std(  # shape (2, N, M, G)
                 r_sites, rup, dctx, self.imts, self.gsims)
